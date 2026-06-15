@@ -80,18 +80,27 @@ def generate_marketing_copy_gemini(news_titles):
 6. 초안 1, 초안 2, 초안 3을 알아보기 쉽게 구분해 주세요.
 """
 
+    import time
+    
     print("\n[AI] 구글 제미나이(Gemini) 모델을 사용하여 인스타그램 마케팅 문구를 생성하고 있습니다...")
     
-    try:
-        # gemini-2.5-flash 모델 사용하여 콘텐츠 생성
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=user_prompt,
-        )
-        return response.text
-    except Exception as e:
-        print(f"[ERROR] Gemini API 호출 오류 발생: {e}")
-        return None
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            # gemini-2.5-flash 모델 사용하여 콘텐츠 생성
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=user_prompt,
+            )
+            return response.text
+        except Exception as e:
+            # 일시적인 구글 무료 서버 부하(503) 감지 시 2초 대기 후 자동으로 재시도합니다.
+            if "503" in str(e) and attempt < max_retries - 1:
+                print(f"[AI] 구글 서버 혼잡 감지 (503). {attempt + 1}초 대기 후 재시도합니다...")
+                time.sleep(3)
+                continue
+            print(f"[ERROR] Gemini API 호출 오류 발생: {e}")
+            return None
 
 if __name__ == "__main__":
     print("=" * 75)
