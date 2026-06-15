@@ -1,8 +1,11 @@
+import os
 import requests
 from bs4 import BeautifulSoup
 import xml.etree.ElementTree as ET
 import urllib.parse
 import sys
+from datetime import datetime
+import pandas as pd
 
 # Windows 콘솔 인코딩 에러 방지 (한글 및 특수문자 출력 안정화)
 sys.stdout.reconfigure(encoding='utf-8')
@@ -93,12 +96,41 @@ def get_latest_news(query, limit=10):
         
     return [], None
 
+def save_to_excel(all_news, output_dir="data"):
+    """
+    수집된 뉴스 데이터를 Pandas DataFrame으로 변환하여 엑셀 파일로 저장합니다.
+    """
+    if not all_news:
+        print("\n[⚠️ 경고] 수집된 뉴스 데이터가 없어 엑셀 저장을 건너뜁니다.")
+        return
+        
+    # data/ 폴더가 없을 경우 생성
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+        
+    df = pd.DataFrame(all_news)
+    
+    # 오늘 날짜 구하기 (YYYY-MM-DD)
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    filename = f"naver_google_news_{today_str}.xlsx"
+    filepath = os.path.join(output_dir, filename)
+    
+    try:
+        df.to_excel(filepath, index=False)
+        print(f"\n💾 [엑셀 저장 완료] 뉴스 수집 데이터가 성공적으로 저장되었습니다!")
+        print(f"   📂 저장 경로: {filepath}")
+    except Exception as e:
+        print(f"\n❌ [엑셀 저장 실패] 파일 쓰기 중 오류가 발생했습니다: {e}")
+
 if __name__ == "__main__":
     keywords = ["중소기업 AI 도입", "중소기업 디지털 전환"]
     
     print("=" * 75)
     print("[NEWS] 실시간 최신 비즈니스 뉴스 크롤러 작동")
     print("=" * 75)
+    
+    all_collected_news = []
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     for kw in keywords:
         print(f"\n🔍 검색 키워드: [{kw}] (최신 10개)")
@@ -113,4 +145,17 @@ if __name__ == "__main__":
             for idx, news in enumerate(news_list, 1):
                 print(f"[{idx:2d}] {news['title']}")
                 print(f"     URL: {news['link']}")
+                
+                # 엑셀 파일 기록을 위한 데이터 구조화
+                all_collected_news.append({
+                    "검색키워드": kw,
+                    "순위": idx,
+                    "출처": source,
+                    "뉴스제목": news['title'],
+                    "링크": news['link'],
+                    "수집일시": current_time
+                })
         print("-" * 75)
+        
+    # 수집한 뉴스 데이터를 엑셀 파일로 자동 저장
+    save_to_excel(all_collected_news)
