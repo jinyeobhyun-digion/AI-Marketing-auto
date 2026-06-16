@@ -14,3 +14,9 @@ openpyxl>=3.1.0
 # Utilities
 requests>=2.31.0
 beautifulsoup4>=4.12.0
+
+# Web Dashboard Dashboard Framework
+streamlit>=1.30.0
+
+# Automation & Scheduler
+schedule>=1.2.0
