@@ -102,6 +102,77 @@ def generate_marketing_copy_gemini(news_titles):
             print(f"[ERROR] Gemini API 호출 오류 발생: {e}")
             return None
 
+def generate_multi_content(news_title, news_link=""):
+    """
+    뉴스 제목과 링크를 입력받아 [1. 네이버 블로그 포스팅], [2. 인스타그램 릴스 대본], [3. 유튜브 쇼츠 시나리오]
+    3종 세트 마케팅 콘텐츠를 생성합니다. (Gemini 2.5 Flash 및 503 재시도 로직 적용)
+    """
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key or "your_gemini_api_key" in api_key:
+        print("\n[INFO] 대표님, Gemini AI 문구를 생성하려면 구글 API 키가 필요합니다.")
+        return None
+        
+    client = genai.Client(api_key=api_key)
+    
+    system_prompt = (
+        "당신은 중소기업 대표님들을 밀착 케어하는 상냥하고 전문적인 AI 비즈니스 마케터이자 콘텐츠 크리에이터입니다. "
+        "주요 타겟 독자는 AI 및 디지털 기술 도입을 주저하고 두려워하는 40대부터 60대 중소기업 대표님들입니다."
+    )
+    
+    user_prompt = f"""
+{system_prompt}
+
+다음 뉴스 기사 제목을 기반으로, AI 도입을 망설이는 40~60대 중소기업 대표님들의 공감과 행동을 이끌어낼 마케팅 콘텐츠 3종 세트([1. 네이버 블로그 포스팅], [2. 인스타그램 릴스 대본], [3. 유튜브 쇼츠 시나리오])를 한 번에 생성해 주세요.
+
+[선택된 뉴스 기사]
+- 뉴스 제목: {news_title}
+- 뉴스 링크: {news_link if news_link else "링크 없음"}
+
+[콘텐츠별 요구사항]
+
+1. 네이버 블로그 포스팅:
+   - 친근하고 자세하며, 격식과 품격을 갖춘 부드러운 경어체(~합니다, ~해요, 대표님)를 사용해 주세요.
+   - 뉴스 내용을 인용하며 AI 도입이 대표님들의 비즈니스 경쟁력 확보와 경영 혁신에 왜 중요한지 설명해 주세요.
+   - 가독성 높은 소제목 구성과 적절한 이모지를 활용하여 줄바꿈을 충분히 해 주세요.
+   - 하단에 해시태그 5개 이상 달아주세요.
+
+2. 인스타그램 릴스 대본:
+   - 짧고 임팩트 있는 구어체로 작성해 주세요.
+   - [화면 연출 지시]와 [나레이션 대사]를 명확히 구분해 주세요.
+   - 대표님들의 이목을 끄는 훅(Hook)으로 시작하여, 30초 분량의 대본을 만들어 주세요.
+   - 하단에 릴스 태그 5개 이상 달아주세요.
+
+3. 유튜브 쇼츠 시나리오:
+   - 60초 이내의 빠른 전개와 몰입감을 주는 숏폼 시나리오 형식입니다.
+   - [장면/비주얼 연출]과 [나레이션/자막] 형태로 구조화해 주세요.
+   - AI 도입에 대한 쉬운 해결책(행동 촉구 - 예: 교육 신청, 문의 등)을 제시하며 마무리해 주세요.
+   - 하단에 쇼츠 태그 5개 이상 달아주세요.
+
+각 플랫폼 콘텐츠 구분을 명확한 헤더(예: ### [1. 네이버 블로그 포스팅] 등)로 작성해 주세요.
+"""
+
+    import time
+    
+    print(f"\n[AI] 구글 제미나이(Gemini) 모델을 사용하여 '{news_title}' 뉴스 기반 3대 플랫폼 콘텐츠를 생성하고 있습니다...")
+    
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            # gemini-2.5-flash 모델 사용하여 콘텐츠 생성
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=user_prompt,
+            )
+            return response.text
+        except Exception as e:
+            # 일시적인 구글 무료 서버 부하(503) 감지 시 3초 대기 후 자동으로 재시도합니다.
+            if "503" in str(e) and attempt < max_retries - 1:
+                print(f"[AI] 구글 서버 혼잡 감지 (503). {attempt + 1}초 대기 후 재시도합니다...")
+                time.sleep(3)
+                continue
+            print(f"[ERROR] Gemini API 호출 오류 발생: {e}")
+            return None
+
 if __name__ == "__main__":
     print("=" * 75)
     print("[AI] Gemini 기반 인스타그램 마케팅 카피 생성기 작동")
