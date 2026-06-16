@@ -11,6 +11,39 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from crawler import get_latest_news, save_to_excel
 from generator import generate_multi_content
+from database import insert_marketing_history
+
+def parse_multi_content(text):
+    """
+    제미나이가 생성한 3대 플랫폼 마크다운 텍스트를 분석하여 
+    블로그, 릴스, 쇼츠 텍스트로 분할합니다.
+    """
+    blog_post = ""
+    instagram_reels = ""
+    youtube_shorts = ""
+    
+    # 헤더 단위로 스플릿
+    parts = text.split("###")
+    for part in parts:
+        part_strip = part.strip()
+        if not part_strip:
+            continue
+            
+        # 블로그 포스팅 감지
+        if "1. 네이버 블로그" in part_strip or "네이버 블로그" in part_strip:
+            blog_post = part_strip.split("]", 1)[-1].strip() if "]" in part_strip else part_strip
+        # 인스타그램 릴스 감지
+        elif "2. 인스타그램 릴스" in part_strip or "인스타그램 릴스" in part_strip:
+            instagram_reels = part_strip.split("]", 1)[-1].strip() if "]" in part_strip else part_strip
+        # 유튜브 쇼츠 감지
+        elif "3. 유튜브 쇼츠" in part_strip or "유튜브 쇼츠" in part_strip:
+            youtube_shorts = part_strip.split("]", 1)[-1].strip() if "]" in part_strip else part_strip
+            
+    # 파싱이 안 되었을 경우의 예외 방지용 백업
+    if not blog_post and not instagram_reels and not youtube_shorts:
+        blog_post = text
+        
+    return blog_post, instagram_reels, youtube_shorts
 
 # Windows 콘솔 인코딩 에러 방지 (한글 및 특수문자 출력 안정화)
 sys.stdout.reconfigure(encoding='utf-8')
@@ -94,8 +127,12 @@ def run_daily_marketing_automation():
         return
         
     # ---------------------------------------------
-    # 3단계: 생성된 콘텐츠 팩 텍스트 파일로 저장
+    # 3단계: 생성된 콘텐츠 팩 데이터베이스(DB) 및 텍스트 파일 저장
     # ---------------------------------------------
+    # DB 저장 연동
+    blog_post, instagram_reels, youtube_shorts = parse_multi_content(multi_content)
+    insert_marketing_history(current_date_str, top_title, blog_post, instagram_reels, youtube_shorts)
+    
     txt_filename = f"data/marketing_content_{current_date_str}.txt"
     try:
         with open(txt_filename, "w", encoding="utf-8") as f:
