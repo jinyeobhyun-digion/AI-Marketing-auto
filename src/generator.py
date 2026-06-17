@@ -41,11 +41,29 @@ def read_news_titles(filepath):
         print(f"[ERROR] 엑셀 파일을 읽는 중 오류 발생: {e}")
         return []
 
+def get_api_key():
+    """
+    Streamlit secrets(클라우드 환경)와 환경 변수(로컬 환경)를 모두 감지하여
+    유효한 Gemini API 키를 가져옵니다.
+    """
+    api_key = None
+    try:
+        import streamlit as st
+        if "GEMINI_API_KEY" in st.secrets:
+            api_key = st.secrets["GEMINI_API_KEY"]
+    except Exception:
+        pass
+        
+    if not api_key:
+        api_key = os.getenv("GEMINI_API_KEY")
+        
+    return api_key
+
 def generate_marketing_copy_gemini(news_titles):
     """
     Google Gemini API를 사용하여 대표님들을 위한 인스타그램 마케팅 문구 초안 3개를 생성합니다.
     """
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = get_api_key()
     if not api_key or "your_gemini_api_key" in api_key:
         print("\n[INFO] 대표님, Gemini AI 문구를 생성하려면 구글 API 키가 필요합니다.")
         print("   1. 구글 AI 스튜디오(https://aistudio.google.com/)에서 무료 API 키를 발급받으세요.")
@@ -107,7 +125,7 @@ def generate_multi_content(news_title, news_link=""):
     뉴스 제목과 링크를 입력받아 [1. 네이버 블로그 포스팅], [2. 인스타그램 릴스 대본], [3. 유튜브 쇼츠 시나리오]
     3종 세트 마케팅 콘텐츠를 생성합니다. (Gemini 2.5 Flash 및 503 재시도 로직 적용)
     """
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = get_api_key()
     if not api_key or "your_gemini_api_key" in api_key:
         print("\n[INFO] 대표님, Gemini AI 문구를 생성하려면 구글 API 키가 필요합니다.")
         return None

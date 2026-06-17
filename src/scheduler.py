@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import logging
 from datetime import datetime
 import pandas as pd
 import schedule
@@ -12,6 +13,45 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from crawler import get_latest_news, save_to_excel
 from generator import generate_multi_content
 from database import insert_marketing_history
+
+# Windows 콘솔 인코딩 에러 방지 (한글 및 특수문자 출력 안정화)
+sys.stdout.reconfigure(encoding='utf-8')
+
+# .env 파일에서 환경 변수(API 키 등) 로드
+load_dotenv()
+
+# ==========================================
+# ⚙️ 로거(Logger) 설정 (data/scheduler.log 에 누적 기록)
+# ==========================================
+os.makedirs("data", exist_ok=True)
+LOG_FILE_PATH = "data/scheduler.log"
+
+logger = logging.getLogger("SME_Scheduler")
+logger.setLevel(logging.INFO)
+
+# 기존에 연결된 핸들러가 있다면 제거 (중복 로깅 방지)
+if logger.hasHandlers():
+    logger.handlers.clear()
+
+# 로그 출력 포맷 설정
+formatter = logging.Formatter('[%(asctime)s] %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+
+# 1. 파일 핸들러 설정 (로그 파일에 누적 저장)
+file_handler = logging.FileHandler(LOG_FILE_PATH, encoding='utf-8')
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+
+# 2. 콘솔 핸들러 설정 (터미널 화면에도 출력)
+stream_handler = logging.StreamHandler(sys.stdout)
+stream_handler.setFormatter(formatter)
+logger.addHandler(stream_handler)
+# ==========================================
+
+# ==========================================
+# ⚙️ 스케줄러 설정 (원하는 시간으로 변경 가능)
+# ==========================================
+TARGET_TIME = "09:00"  # 매일 아침 09시 실행
+# ==========================================
 
 def parse_multi_content(text):
     """
@@ -45,18 +85,6 @@ def parse_multi_content(text):
         
     return blog_post, instagram_reels, youtube_shorts
 
-# Windows 콘솔 인코딩 에러 방지 (한글 및 특수문자 출력 안정화)
-sys.stdout.reconfigure(encoding='utf-8')
-
-# .env 파일에서 환경 변수(API 키 등) 로드
-load_dotenv()
-
-# ==========================================
-# ⚙️ 스케줄러 설정 (원하는 시간으로 변경 가능)
-# ==========================================
-TARGET_TIME = "09:00"  # 매일 아침 09시 실행
-# ==========================================
-
 def run_daily_marketing_automation():
     """
     매일 지정된 시간에 뉴스를 수집하고, 
@@ -65,7 +93,7 @@ def run_daily_marketing_automation():
     current_date_str = datetime.now().strftime("%Y-%m-%d")
     current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    print(f"\n[⏳ {current_time_str}] 매일 자동 마케팅 자동화 프로세스를 시작합니다!")
+    logger.info("매일 자동 마케팅 자동화 프로세스를 시작합니다!")
     
     # ---------------------------------------------
     # 1단계: 실시간 뉴스 수집 및 엑셀 저장
@@ -73,7 +101,7 @@ def run_daily_marketing_automation():
     keywords = ["중소기업 AI 도입", "중소기업 디지털 전환"]
     all_collected_news = []
     
-    print(f"[1단계] 실시간 뉴스 수집 중... (키워드: {', '.join(keywords)})")
+    logger.info(f"[1단계] 실시간 뉴스 수집 중... (검색 키워드: {', '.join(keywords)})")
     for kw in keywords:
         news_list, source = get_latest_news(kw, limit=10)
         if news_list:
@@ -88,7 +116,7 @@ def run_daily_marketing_automation():
                 })
                 
     if not all_collected_news:
-        print("[⚠️ 경고] 수집된 뉴스 데이터가 없어 오늘의 자동화 작업을 중단합니다.")
+        logger.warning("수집된 뉴스 데이터가 없어 오늘의 자동화 작업을 중단합니다.")
         return
         
     # data/ 폴더가 없을 경우 생성
@@ -102,28 +130,27 @@ def run_daily_marketing_automation():
     try:
         df.to_excel(excel_date_path, index=False)
         df.to_excel(excel_sync_path, index=False)
-        print(f"✅ [엑셀 저장 완료] 뉴스 데이터가 '{excel_sync_path}' 및 '{excel_date_path}'에 성공적으로 저장되었습니다.")
+        logger.info(f"엑셀 저장 완료: 뉴스 데이터가 '{excel_sync_path}' 및 '{excel_date_path}'에 저장되었습니다.")
     except Exception as e:
-        print(f"[❌ 에러] 엑셀 저장 중 오류 발생: {e}")
+        logger.error(f"엑셀 저장 중 오류 발생: {e}")
         return
 
     # ---------------------------------------------
     # 2단계: 최신 기사 1위를 소스로 AI 멀티 콘텐츠 제작
     # ---------------------------------------------
-    print("[2단계] 수집된 뉴스 중 최신 1위 기사로 AI 마케팅 콘텐츠 3종을 생성합니다.")
+    logger.info("[2단계] 수집된 뉴스 중 최신 1위 기사로 AI 마케팅 콘텐츠 3종 세트를 생성합니다.")
     
-    # 수집 리스트의 첫 번째 기사를 가져옵니다.
     top_news = all_collected_news[0]
     top_title = top_news["뉴스제목"]
     top_link = top_news["링크"]
     
-    print(f"👉 대상 기사 제목: '{top_title}'")
+    logger.info(f"선택된 기사 제목: '{top_title}'")
     
     # Gemini를 활용한 고밀도 3대 플랫폼 마케팅 콘텐츠 세트 생성
     multi_content = generate_multi_content(top_title, top_link)
     
     if not multi_content:
-        print("[❌ 에러] AI 마케팅 문구 생성에 실패했습니다.")
+        logger.error("AI 마케팅 문구 생성에 실패했습니다.")
         return
         
     # ---------------------------------------------
@@ -131,7 +158,12 @@ def run_daily_marketing_automation():
     # ---------------------------------------------
     # DB 저장 연동
     blog_post, instagram_reels, youtube_shorts = parse_multi_content(multi_content)
-    insert_marketing_history(current_date_str, top_title, blog_post, instagram_reels, youtube_shorts)
+    db_saved = insert_marketing_history(current_date_str, top_title, blog_post, instagram_reels, youtube_shorts)
+    
+    if db_saved:
+        logger.info("데이터베이스(DB)에 마케팅 콘텐츠 이력이 자동 저장되었습니다.")
+    else:
+        logger.warning("데이터베이스(DB) 저장 과정에 실패했습니다.")
     
     txt_filename = f"data/marketing_content_{current_date_str}.txt"
     try:
@@ -143,17 +175,19 @@ def run_daily_marketing_automation():
             f.write(f"====================================================\n\n")
             f.write(multi_content)
             
-        print(f"🎉 [자동화 완료] 오늘의 3대 플랫폼 마케팅 콘텐츠 세트가 성공적으로 저장되었습니다!")
-        print(f"   📂 텍스트 파일 경로: {txt_filename}\n")
+        logger.info(f"오늘의 3대 플랫폼 마케팅 콘텐츠 세트가 백업 텍스트 파일로 저장되었습니다.")
+        logger.info(f"텍스트 파일 경로: {txt_filename}")
+        logger.info("모든 자동 마케팅 자동화 프로세스가 성공적으로 마감되었습니다!")
     except Exception as e:
-        print(f"[❌ 에러] 결과 텍스트 파일 저장 중 오류 발생: {e}")
+        logger.error(f"결과 텍스트 파일 저장 중 오류 발생: {e}")
 
 if __name__ == "__main__":
-    print("=" * 75)
-    print("⏰ SME AI 마케팅 스케줄러 자동 제어판 가동")
-    print(f"   - 매일 아침 [{TARGET_TIME}] 자동 실행 대기 중")
-    print("   - (안정성 검증을 위해 실행 즉시 최초 1회 테스트 구동을 진행합니다.)")
-    print("=" * 75)
+    logger.info("=" * 70)
+    logger.info("SME AI 마케팅 스케줄러 자동 제어판 가동")
+    logger.info(f"   - 매일 아침 [{TARGET_TIME}] 자동 실행 대기 중")
+    logger.info(f"   - 로그 기록 파일 경로: {LOG_FILE_PATH}")
+    logger.info("   - (안정성 검증을 위해 가동 즉시 최초 1회 테스트 구동을 진행합니다.)")
+    logger.info("=" * 70)
     
     # 스케줄러 기동 시, 바로 잘 작동하는지 1회 사전 테스트 실행
     run_daily_marketing_automation()
@@ -167,4 +201,4 @@ if __name__ == "__main__":
             schedule.run_pending()
             time.sleep(1)
     except KeyboardInterrupt:
-        print("\n⏰ 스케줄러가 사용자에 의해 종료되었습니다.")
+        logger.info("스케줄러가 사용자에 의해 수동 종료되었습니다.")
